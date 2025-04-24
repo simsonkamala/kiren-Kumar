@@ -1,11 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const chromium = require("chrome-aws-lambda");
+const puppeteer = require("puppeteer"); // ✅ Use only puppeteer
 
 router.post("/generate", async (req, res) => {
   const { html } = req.body;
 
-  // Step 1: Early exit on invalid input
   if (!html || typeof html !== "string" || html.trim().length < 10) {
     return res.status(400).json({ error: "Invalid or missing HTML content" });
   }
@@ -13,27 +12,17 @@ router.post("/generate", async (req, res) => {
   let browser;
 
   try {
-    const executablePath = await chromium.executablePath;
-    console.log("✅ Chromium path resolved:", executablePath);
-
-    // Step 2: Launch the browser
-    browser = await chromium.puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath,
-      headless: chromium.headless,
-      ignoreDefaultArgs: ["--enable-automation"],
+    // ✅ You already know the Chrome path
+    browser = await puppeteer.launch({
+      executablePath: "/usr/bin/google-chrome",
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
-
-    // Step 3: Set HTML content
     await page.setContent(html, { waitUntil: "networkidle0" });
-
-    // Step 4: Optional media emulation
     await page.emulateMediaType("screen");
 
-    // Step 5: Generate PDF buffer
     const pdfBuffer = await page.pdf({
       format: "A3",
       printBackground: true,
@@ -42,7 +31,6 @@ router.post("/generate", async (req, res) => {
       landscape: false,
     });
 
-    // Step 6: Send PDF as response
     res.set({
       "Content-Type": "application/pdf",
       "Content-Disposition": "attachment; filename=invoice.pdf",
@@ -51,11 +39,9 @@ router.post("/generate", async (req, res) => {
 
     res.send(pdfBuffer);
     console.log("✅ PDF generated and sent successfully");
-
   } catch (err) {
     console.error("❌ Error during PDF generation:", err.message);
     res.status(500).json({ error: "Server error while generating PDF" });
-
   } finally {
     if (browser) {
       try {
